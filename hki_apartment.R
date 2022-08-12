@@ -54,6 +54,33 @@ for(jj in 1:number_of_results){
   apartment_details[[jj]] <- tibble(headers, values)
   cat(jj, "/", number_of_results, "\n")
 }
-  
+names(apartment_details) <- df_all$link
+
+apartment_details_clean <- purrr::keep(apartment_details, is_tibble)
+
+info <- tibble(finnish = c("Sijainti","Kaupunginosa", "Asuinpinta-ala",
+                           "Kerros", "Velaton hinta", "Hoitovastike", "Neliöhinta", "Rakennusvuosi"),
+               catala = c("carrer", "barri", "superficie", "alura", "preu", "mensualitat", "preu_metre", "any"))
+
+apartment_details_clean_info <- lapply(apartment_details_clean, function(x) x %>% filter(headers %in% info$finnish))
+
+apartment_details_df <- bind_rows(apartment_details_clean_info,.id = "id")
+
+apartment_details_df %>%
+  filter(headers %in% c("Kerros","Asuinpinta-ala")) %>%
+  mutate(values = str_extract(values, "[0-9]*"))
+
+apartment_details_df %>%
+  filter(headers %in% c("Velaton hinta",
+                        "Neliöhinta")) %>%
+  mutate(headers = "Preu",
+         values = str_extract(str_replace(values,pattern = " ", ""),"[0-9]*"))
+
+apartment_details_df %>%
+  filter(headers == "Hoitovastike") %>%
+  mutate(values = str_extract(str_trim(values), "[0-9]*"))
+
+
+
   
   
