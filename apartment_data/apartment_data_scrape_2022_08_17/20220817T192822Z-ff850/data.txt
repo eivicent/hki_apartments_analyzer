@@ -1,0 +1,8 @@
+file: apartment_data_scrape_2022_08_17.rds
+file_size: 16195
+pin_hash: ff8506b96e3efd9f
+type: rds
+title: 'apartment_data_scrape_2022_08_17: a pinned list'
+description: ~
+created: 20220817T192822Z
+api_version: 1.0

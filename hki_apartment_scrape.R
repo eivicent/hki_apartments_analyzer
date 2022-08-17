@@ -2,7 +2,8 @@ library(tidyverse)
 library(rvest)
 library(RSelenium)
 library(glue)
-library(shadowr)
+library(pins)
+
 get_max_pages <- function(url_search, rd){
   results <- rd$findElements(using = "class", value = "pagination__pages")
   pages <- unlist(sapply(results, function(x) x$getElementText()))
@@ -98,13 +99,10 @@ info <- tibble(headers = c("Sijainti","Kaupunginosa", "Asuinpinta-ala",
                catala = c("carrer", "barri", "superficie", "altura", "preu", "mensualitat", "preu_metre", "any"))
 
 apartment_df_clean <-  clean_apartments_df(apartment_df, info)
-  
 
-ggplot(apartment_df_clean %>% filter(any > 1028),
-       aes(x = superficie,
-           y = preu_metre,
-           color = as_factor(round(any/10)*10))) +
-  geom_point() 
-
-  
-  
+pin_write(board_folder(path = "./apartment_data"), 
+          list("date_of_data" = Sys.Date(), "url_search" = glue(url_search),
+               "number_of_results" = length(unique(apartment_df$id)),
+               "results_df" = apartment_df_clean), 
+          paste0("apartment_data_scrape_",str_replace_all(Sys.Date(),"-","_")),
+          versioned = F, type = "rds")
