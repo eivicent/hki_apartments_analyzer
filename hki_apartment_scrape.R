@@ -61,7 +61,7 @@ scrape_apartments <- function(all_links){
     distinct()
   return(apartment_details_clean)
 }
-clean_apartments_df <- function(apartment_df, info){
+clean_apartments_df <- function(apartment_df, info, dim_barris = NULL){
   aux <- apartment_df %>% 
     filter(headers %in% info$headers) %>%
     inner_join(info, by = "headers")
@@ -75,14 +75,28 @@ clean_apartments_df <- function(apartment_df, info){
     rows_update(aux2, by = c("id", "catala","headers")) %>%
     select(-headers) %>%
     pivot_wider(names_from = catala, values_from = values) %>%
-    mutate(across(altura:any, as.numeric))
+    mutate(across(altura:any, as.numeric)) %>%
+    `if`(!is.null(dim_barris),
+        dplyr::left_join(.,dim_barris, c("barri" = "original")) %>%
+        dplyr::mutate(actualitzat = coalesce(actualitzat, barri)) %>%
+        dplyr::select(-barri) %>%
+        dplyr::rename(barri = actualitzat),.) %>%
+    dplyr::distinct()
   
   return(apartment_details_df_clean)
   
 }
 
+apartment_details_df_clean %>% count(barri) %>%
+  ggplot(aes(x = fct_reorder(barri,n),
+             y = n)) +
+  geom_col() +
+  coord_flip()
+
+##### SCRAPE #####
 page_number <- 1
-url_search <- ("https://asunnot.oikotie.fi/myytavat-asunnot?pagination={page_number}&locations=%5B%5B1642,4,%22Kamppi,%20Helsinki%22%5D,%5B5695443,4,%22J%C3%A4tk%C3%A4saari,%20Helsinki%22%5D,%5B1643,4,%22Punavuori,%20Helsinki%22%5D,%5B1644,4,%22Eira,%20Helsinki%22%5D,%5B1645,4,%22Ullanlinna,%20Helsinki%22%5D,%5B1724,4,%22T%C3%B6%C3%B6l%C3%B6,%20Helsinki%22%5D,%5B1669,4,%22Lauttasaari,%20Helsinki%22%5D,%5B5695451,4,%22Kalasatama,%20Helsinki%22%5D,%5B1649,4,%22Kallio,%20Helsinki%22%5D,%5B1660,4,%22Vallila,%20Helsinki%22%5D,%5B335403,4,%22Alppila,%20Helsinki%22%5D,%5B335080,4,%22Lapinlahti,%20Helsinki%22%5D,%5B335078,4,%22Ruoholahti,%20Helsinki%22%5D,%5B335075,4,%22Siltasaari,%20Helsinki%22%5D,%5B335073,4,%22Hakaniemi,%20Helsinki%22%5D,%5B11820666,4,%22Sompasaari,%20Helsinki%22%5D,%5B11820669,4,%22Hanasaari,%20Helsinki%22%5D,%5B1655,4,%22Pasila,%20Helsinki%22%5D,%5B1680,4,%22Kulosaari,%20Helsinki%22%5D,%5B1668,4,%22Munkkiniemi,%20Helsinki%22%5D%5D&price%5Bmax%5D=350000&size%5Bmin%5D=25&roomCount%5B%5D=1&roomCount%5B%5D=2&buildingType%5B%5D=1&buildingType%5B%5D=256&cardType=100")
+max_price <- 400000L
+url_search <- ("https://asunnot.oikotie.fi/myytavat-asunnot?pagination={page_number}&locations=%5B%5B1642,4,%22Kamppi,%20Helsinki%22%5D,%5B5695443,4,%22J%C3%A4tk%C3%A4saari,%20Helsinki%22%5D,%5B1643,4,%22Punavuori,%20Helsinki%22%5D,%5B1644,4,%22Eira,%20Helsinki%22%5D,%5B1645,4,%22Ullanlinna,%20Helsinki%22%5D,%5B1724,4,%22T%C3%B6%C3%B6l%C3%B6,%20Helsinki%22%5D,%5B1669,4,%22Lauttasaari,%20Helsinki%22%5D,%5B5695451,4,%22Kalasatama,%20Helsinki%22%5D,%5B1649,4,%22Kallio,%20Helsinki%22%5D,%5B1660,4,%22Vallila,%20Helsinki%22%5D,%5B335403,4,%22Alppila,%20Helsinki%22%5D,%5B335080,4,%22Lapinlahti,%20Helsinki%22%5D,%5B335078,4,%22Ruoholahti,%20Helsinki%22%5D,%5B335075,4,%22Siltasaari,%20Helsinki%22%5D,%5B335073,4,%22Hakaniemi,%20Helsinki%22%5D,%5B11820666,4,%22Sompasaari,%20Helsinki%22%5D,%5B1655,4,%22Pasila,%20Helsinki%22%5D,%5B1680,4,%22Kulosaari,%20Helsinki%22%5D%5D&price%5Bmax%5D={max_price}&roomCount%5B%5D=1&roomCount%5B%5D=2&roomCount%5B%5D=3&buildingType%5B%5D=1&buildingType%5B%5D=256&cardType=100")
 
 driver <- rsDriver(browser = c("chrome"), chromever="104.0.5112.79")
 rd <- driver[["client"]]
@@ -94,15 +108,19 @@ max_pages <- get_max_pages(url_serach, rd)
 all_links <- scrape_results(url_search, max_pages, rd)
 apartment_df <- scrape_apartments(all_links)
 
+
+##### CLEAN RESULTS #####
 info <- tibble(headers = c("Sijainti","Kaupunginosa", "Asuinpinta-ala",
                            "Kerros", "Velaton hinta", "Hoitovastike", "Neliöhinta", "Rakennusvuosi"),
                catala = c("carrer", "barri", "superficie", "altura", "preu", "mensualitat", "preu_metre", "any"))
 
-apartment_df_clean <-  clean_apartments_df(apartment_df, info)
+dim_barris <- read_csv("dim_barris.csv", show_col_types = F)
+
+apartment_df_clean <-  clean_apartments_df(apartment_df, info, dim_barris)
 
 pin_write(board_folder(path = "./apartment_data"), 
-          list("date_of_data" = Sys.Date(), "url_search" = glue(url_search),
+          list("url_search" = glue(url_search),
                "number_of_results" = length(unique(apartment_df$id)),
                "results_df" = apartment_df_clean), 
-          paste0("apartment_data_scrape_",str_replace_all(Sys.Date(),"-","_")),
+          paste0(Sys.Date()),
           versioned = F, type = "rds")

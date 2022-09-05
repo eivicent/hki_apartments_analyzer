@@ -1,12 +1,22 @@
 library(tidyverse)
 library(gridlayout)
+library(stringr)
 
 path <- "./apartment_data/"
-data <- pins::pin_read(board_folder(path = path),
-               name = list.files(path) %>% max())
+data <- pins::pin_read(pins::board_folder(path = path),
+              name = list.files(path) %>% max())
 
-df <- data$results_df
+trend <- sapply(list.files(path), function(x) {
+  pins::pin_read(pins::board_folder(path = path),
+                       name = x) %>%
+  pluck("number_of_results")
+})
 
+date_of_data <- sapply(names(trend), function(x){
+  str_flatten(unlist(str_extract_all(x, "\\d+")),collapse = "-")
+})
+
+df <- data$results_df 
 
 df %>% count(barri) %>%
   ggplot(aes(x = fct_reorder(barri,n),
@@ -14,17 +24,17 @@ df %>% count(barri) %>%
   geom_col() +
   coord_flip()
 
-ggplot(df, aes(x = preu_metre,
-               y = preu)) +
-  geom_point()
-
-
+ggplot(df, aes(x = fct_reorder(barri, preu_metre),
+               y = preu_metre)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(alpha = .3) +
+  coord_flip()
 
 library(shiny)
 
 page_layout <- gridlayout::new_gridlayout(
   c(" 1fr 1fr 1fr",
-    "100px barri barri superficie",
+    "120px barri barri superficie",
     "500px mainplot mainplot mainplot",
     "500px table table table"),container_height = "viewport")
 
@@ -63,8 +73,7 @@ server <- function(input, output, session) {
       geom_point() +
       scale_x_continuous(labels = scales::label_dollar(suffix = "€/m2",prefix = NULL)) +
       scale_y_continuous(labels = scales::label_dollar(suffix = "€", prefix = NULL)) +
-      coord_cartesian(xlim = c(4e3, 10e3),
-                      ylim = c(1.5e5, 3.5e5)) +
+      coord_cartesian(ylim = c(1.5e5, 4e5)) +
       labs(x = NULL, y = NULL) +
       ggtitle("Apartaments per preu per metre quadrat i preu total") +
       theme_minimal(base_size = 14)
