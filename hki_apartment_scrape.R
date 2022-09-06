@@ -21,10 +21,10 @@ scrape_results <- function(url_search, max_page_number, rd){
     page_number <- ii
     new_page <- glue(url_search)
     rd$navigate(new_page)
-    Sys.sleep(5)
+    Sys.sleep(30)
     links <- rd$findElements(using = "xpath", value = "//*[@class = 'ot-card ng-scope']")
     df <- data.frame(link = unlist(sapply(links, function(x){x$getElementAttribute('href')})))
-    Sys.sleep(5)
+    Sys.sleep(30)
     all_links[[ii]] <- df
     cat(ii, "/", max_page_number, "\n")
   }
@@ -38,7 +38,7 @@ scrape_apartments <- function(all_links){
     
     apartment_html <-  tryCatch(read_html(all_links[jj]),
                                 error = function(e) NA)
-    
+    Sys.sleep(10)
     if(is.na(apartment_html)) {
       apartment_details[[jj]] <- NA
       next
@@ -86,12 +86,6 @@ clean_apartments_df <- function(apartment_df, info, dim_barris = NULL){
   return(apartment_details_df_clean)
   
 }
-
-apartment_details_df_clean %>% count(barri) %>%
-  ggplot(aes(x = fct_reorder(barri,n),
-             y = n)) +
-  geom_col() +
-  coord_flip()
 
 ##### SCRAPE #####
 page_number <- 1

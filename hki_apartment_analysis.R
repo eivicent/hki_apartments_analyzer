@@ -1,42 +1,92 @@
 library(tidyverse)
 library(gridlayout)
 library(stringr)
+library(shiny)
+library(patchwork)
 
 path <- "./apartment_data/"
-data <- pins::pin_read(pins::board_folder(path = path),
-              name = list.files(path) %>% max())
 
-trend <- sapply(list.files(path), function(x) {
-  pins::pin_read(pins::board_folder(path = path),
-                       name = x) %>%
-  pluck("number_of_results")
-})
+count_barris_progressio <- function(path){
+  all_data <- lapply(list.files(path), function(x) 
+    pins::pin_read(pins::board_folder(path = path),
+                   name = x) %>% pluck("results_df"))
+  names(all_data) <- list.files(path)
+  out <- all_data %>% bind_rows(.id = "date") %>%
+    count(date, barri)
+  return(out)
+}
+tendencia_general <- function(path){
+  trend <- sapply(list.files(path), function(x) {
+    pins::pin_read(pins::board_folder(path = path),name = x) %>%
+    pluck("number_of_results")
+  })
+  out <- tibble(date = names(trend), general_trend = trend)
+  return(out)
+}
+ultimes_dades_disponibles <- function(path, minim_barri = 2, minim_preu = 4000){
+  all_data <- pins::pin_read(pins::board_folder(path = path),
+                   name = max(list.files(path))) %>%
+    pluck("results_df")
+  
+  out <- all_data %>%
+    group_by(barri) %>%
+    mutate(count_barri = n()) %>%
+    filter(count_barri > minim_barri &
+             preu_metre >= minim_preu)
+  return(out)
+}
 
-date_of_data <- sapply(names(trend), function(x){
-  str_flatten(unlist(str_extract_all(x, "\\d+")),collapse = "-")
-})
+barris <- count_barris_progressio(path)
+tendencia <- tendencia_general(path)
+df <- ultimes_dades_disponibles(path)
 
-df <- data$results_df 
+plot <- function(){
 
-df %>% count(barri) %>%
-  ggplot(aes(x = fct_reorder(barri,n),
-             y = n)) +
-  geom_col() +
-  coord_flip()
-
-ggplot(df, aes(x = fct_reorder(barri, preu_metre),
+a <- ggplot(df, aes(x = fct_reorder(barri, count_barri),
                y = preu_metre)) +
   geom_boxplot(outlier.shape = NA) +
   geom_jitter(alpha = .3) +
-  coord_flip()
+  coord_flip() +
+  scale_y_continuous(labels = scales::dollar_format(accuracy = .1,
+                                                    scale = .001,
+                                                    prefix = NULL),
+                     breaks = seq(0,20e3, by = 1.5e3)) +
+  labs(y = "k€ / m2") +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.major.x = element_line(colour = "darkgrey",linetype = 2),
+        panel.grid.major.y = element_blank(),
+        panel.background = element_blank()
+        
+  )
 
-library(shiny)
+b <- ggplot(select(df, barri, count_barri) %>% unique, 
+       aes(x = fct_reorder(barri, count_barri),
+               y = 0)) +
+  geom_text(aes(label = count_barri)) +
+  coord_flip() +
+  labs(y = NULL) + 
+  theme(text = element_text(size = 16),
+        panel.grid = element_blank(),
+        panel.background = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank()
+        )
+
+c <- b + a + plot_layout(widths = c(1,10)) &
+  labs(x = NULL)
+
+c
+
+return(c)
+}
 
 page_layout <- gridlayout::new_gridlayout(
-  c(" 1fr 1fr 1fr",
-    "120px barri barri superficie",
-    "500px mainplot mainplot mainplot",
-    "500px table table table"),container_height = "viewport")
+  c(" 1fr 1fr",
+    "300px distplot trend",
+    "500px mainplot mainplot",
+    "500px table table"),container_height = "viewport")
 
 ui <- grid_page(layout = page_layout,
   grid_card("barri",
