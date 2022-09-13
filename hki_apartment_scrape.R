@@ -21,7 +21,6 @@ scrape_results <- function(url_search, max_page_number, rd){
     page_number <- ii
     new_page <- glue(url_search)
     rd$navigate(new_page)
-    Sys.sleep(30)
     links <- rd$findElements(using = "xpath", value = "//*[@class = 'ot-card ng-scope']")
     df <- data.frame(link = unlist(sapply(links, function(x){x$getElementAttribute('href')})))
     Sys.sleep(30)

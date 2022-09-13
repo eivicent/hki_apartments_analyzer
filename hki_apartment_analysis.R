@@ -1,7 +1,7 @@
 library(tidyverse)
-library(gridlayout)
 library(stringr)
 library(shiny)
+library(bs4Dash)
 library(patchwork)
 
 path <- "./apartment_data/"
@@ -58,15 +58,15 @@ a <- ggplot(df, aes(x = fct_reorder(barri, count_barri),
         panel.grid.major.x = element_line(colour = "darkgrey",linetype = 2),
         panel.grid.major.y = element_blank(),
         panel.background = element_blank()
-        
+
   )
 
-b <- ggplot(select(df, barri, count_barri) %>% unique, 
+b <- ggplot(select(df, barri, count_barri) %>% unique,
        aes(x = fct_reorder(barri, count_barri),
                y = 0)) +
   geom_text(aes(label = count_barri)) +
   coord_flip() +
-  labs(y = NULL) + 
+  labs(y = NULL) +
   theme(text = element_text(size = 16),
         panel.grid = element_blank(),
         panel.background = element_blank(),
@@ -77,42 +77,50 @@ b <- ggplot(select(df, barri, count_barri) %>% unique,
 c <- b + a + plot_layout(widths = c(1,10)) &
   labs(x = NULL)
 
-c
-
 return(c)
 }
 
-page_layout <- gridlayout::new_gridlayout(
-  c(" 1fr 1fr",
-    "300px distplot trend",
-    "500px mainplot mainplot",
-    "500px table table"),container_height = "viewport")
-
-ui <- grid_page(layout = page_layout,
-  grid_card("barri",
-            selectInput("barri_filter",label = "Barri",
-                        choices = unique(df$barri),selectize = T, 
-                        multiple = T, 
-                        selected = unique(df$barri), width = "100%")
-            ),
-  grid_card("superficie",
-            sliderInput(inputId = "superficie_filter",label = "Superficie",
-                        min = min(df$superficie), max = max(df$superficie), 
-                        value = c(min(df$superficie),max(df$superficie)), step = 1)),
-  grid_card("mainplot",
-            plotOutput("scatter_plot",brush = "plot_brush")
-            ),
-  grid_card("table", scrollable = T,
-            DT::dataTableOutput("main_table")
-            )
+ui <- fluidPage(
+  fluidRow(
+    valueBox(mean(df$preu_metre),subtitle = "")
+    
+  ),
+  fluidRow(
+    column(width = 6,
+           plotOutput("distplot_plot")
+    ),
+    column(width = 6,
+           selectInput(inputId = "f_barri",
+                       label = "Barri",
+                       choices = barris$barri,selected = "Alppila"),
+           plotOutput("trendplot_plot")
+    )
+  ),
+  fluidRow(
+    plotOutput("scatter_plot",brush = "plot_brush")
+          ),
+  fluidRow(
+    DT::dataTableOutput("main_table")
+    )
 )
 
 server <- function(input, output, session) {
+
+
+  output$distplot_plot <- renderPlot({
+    plot()
+    })
+  
+  output$trendplot_plot <- renderPlot({
+    ggplot(df %>% filter(barri == input$f_barri),
+           aes(x = preu_metre)) +
+      geom_bar(stat = "count")
+    
+  })
   
   data <- reactive({
     df %>%
-      dplyr::filter(barri %in% input$barri_filter) %>%
-      dplyr::filter(between(superficie, input$superficie_filter[1], input$superficie_filter[2]))
+      dplyr::filter(barri %in% input$f_barri)
   })
   
   output$scatter_plot <- renderPlot({
