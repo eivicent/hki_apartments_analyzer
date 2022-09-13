@@ -74,14 +74,7 @@ clean_apartments_df <- function(apartment_df, info, dim_barris = NULL){
     rows_update(aux2, by = c("id", "catala","headers")) %>%
     select(-headers) %>%
     pivot_wider(names_from = catala, values_from = values) %>%
-    mutate(across(altura:any, as.numeric)) %>%
-    `if`(!is.null(dim_barris),
-        dplyr::left_join(.,dim_barris, c("barri" = "original")) %>%
-        dplyr::mutate(actualitzat = coalesce(actualitzat, barri)) %>%
-        dplyr::select(-barri) %>%
-        dplyr::rename(barri = actualitzat),.) %>%
-    dplyr::distinct()
-  
+    mutate(across(altura:any, as.numeric)) 
   return(apartment_details_df_clean)
   
 }
@@ -107,9 +100,7 @@ info <- tibble(headers = c("Sijainti","Kaupunginosa", "Asuinpinta-ala",
                            "Kerros", "Velaton hinta", "Hoitovastike", "Neliöhinta", "Rakennusvuosi"),
                catala = c("carrer", "barri", "superficie", "altura", "preu", "mensualitat", "preu_metre", "any"))
 
-dim_barris <- read_csv("dim_barris.csv", show_col_types = F)
-
-apartment_df_clean <-  clean_apartments_df(apartment_df, info, dim_barris)
+apartment_df_clean <-  clean_apartments_df(apartment_df, info)
 
 pin_write(board_folder(path = "./apartment_data"), 
           list("url_search" = glue(url_search),
