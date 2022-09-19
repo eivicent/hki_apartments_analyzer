@@ -7,13 +7,23 @@ library(lubridate)
 
 path <- "./apartment_data/"
 dim_barris <- read_csv("dim_barris.csv", show_col_types = F)
+clean_barris_apartments_df <- function(apartments_df, dim_barris = NULL){
+  apartments_df %>% 
+    `if`(!is.null(dim_barris),
+         dplyr::left_join(.,dim_barris, c("barri" = "original")) %>%
+           dplyr::mutate(actualitzat = coalesce(actualitzat, barri)) %>%
+           dplyr::select(-barri) %>%
+           dplyr::rename(barri = actualitzat),.) %>%
+    dplyr::distinct()
+}
 
-count_barris_progressio <- function(path){
+count_barris_progressio <- function(path, dim_barris = dim_barris){
   all_data <- lapply(list.files(path), function(x) 
     pins::pin_read(pins::board_folder(path = path),
                    name = x) %>% pluck("results_df"))
   names(all_data) <- list.files(path)
   out <- all_data %>% bind_rows(.id = "date") %>%
+    clean_barris_apartments_df(dim_barris) %>%
     group_by(date, barri)  %>%
     summarise(n = n(),
               minpreu = min(preu_metre),
@@ -28,15 +38,6 @@ tendencia_general <- function(path){
   })
   out <- tibble(date = names(trend), general_trend = trend)
   return(out)
-}
-clean_barris_apartments_df <- function(apartments_df, dim_barris = NULL){
-  apartments_df %>% 
-    `if`(!is.null(dim_barris),
-         dplyr::left_join(.,dim_barris, c("barri" = "original")) %>%
-           dplyr::mutate(actualitzat = coalesce(actualitzat, barri)) %>%
-           dplyr::select(-barri) %>%
-           dplyr::rename(barri = actualitzat),.) %>%
-    dplyr::distinct()
 }
 
 ultimes_dades_disponibles <- function(path, minim_barri = 2, minim_preu = 4000){
@@ -76,13 +77,13 @@ pinta_distribucio_barri <- function(df){
 }
 
 last_date <- list.files(path) %>% max()
-barris <- count_barris_progressio(path) %>% 
-  clean_barris_apartments_df(dim_barris)
+barris <- count_barris_progressio(path, dim_barris)
 tendencia <- tendencia_general(path)
 df <- ultimes_dades_disponibles(path, minim_barri = 4) %>%
   clean_barris_apartments_df(., dim_barris)
 
-tendencia_barris <- barris %>% group_by(barri) %>% arrange(date) %>%
+tendencia_barris <- barris %>% 
+  group_by(barri) %>% arrange(date) %>%
   mutate(diff_n = (n - coalesce(lag(n),n))/n,
          diff_preu = (avgpreu-coalesce(lag(avgpreu),avgpreu))/avgpreu) %>%
   slice_tail(n = 1)
