@@ -1,11 +1,11 @@
 library(tidyverse)
-library(stringr)
 library(shiny)
-library(bs4Dash)
-library(patchwork)
+library(shinydashboard)
 library(lubridate)
+library(pins)
 
 path <- "./apartment_data/"
+path2 <- "./data/"
 dim_barris <- read_csv("dim_barris.csv", show_col_types = F)
 clean_barris_apartments_df <- function(apartments_df, dim_barris = NULL){
   apartments_df %>% 
@@ -40,9 +40,9 @@ tendencia_general <- function(path){
 }
 ultimes_dades_disponibles <- function(path, minim_barri = 2, minim_preu = 4000, dim_barris = dim_barris){
   all_data <- pins::pin_read(pins::board_folder(path = path),
-                   name = max(list.files(path))) %>%
+                   name = max(as.Date(list.files(path)),na.rm=T)) %>%
     pluck("results_df") %>%
-    clean_barris_apartments_df(., dim_barris)
+    clean_barris_apartments_df(dim_barris)
   
   out <- all_data %>%
     group_by(barri) %>%
@@ -80,7 +80,11 @@ pinta_distribucio_barri <- function(df){
 last_date <- list.files(path) %>% max()
 barris <- count_barris_progressio(path, dim_barris)
 tendencia <- tendencia_general(path)
-df <- ultimes_dades_disponibles(path, minim_barri = 4, dim_barris = dim_barris) 
+df <- ultimes_dades_disponibles(path, minim_barri = 4, dim_barris = dim_barris)
+
+# pins::pin_write(board = pins::board_folder(path2),
+#                            x = df %>% slice(1) %>% select(id) %>% mutate(status = "test"),
+#                            name = "favorits")
 
 tendencia_barris <- barris %>% 
   group_by(barri) %>% arrange(date) %>%
@@ -97,39 +101,67 @@ tendencia_barris %>% arrange(desc(n)) %>%
     theme_void(base_size = 16)
 
 
-
 ### SHINY APP
-
-ui <- fluidPage(
-  # fluidRow(
-  #   plotOutput("distplot_plot", dblclick = "f_barri_2")
-  #   ),
-  # fluidRow(
-  #   tableOutput("dobleclick"),
-  #   checkboxInput(inputId = "s_barri",label = "Select all", value = T),
-  #   uiOutput("ui_f_barri"),
-  #   plotOutput("scatter_plot",brush = "plot_brush")
-  #         ),
+header <- dashboardHeader(
+  title = "Apartments in Helsinki"
+)
+body <- dashboardBody(
+  # Header for summary
   fluidRow(
-    column(width = 3,
-           actionButton(inputId = "interested_button",label = "Interested")
-    ),
-    column(width = 3,
-           actionButton(inputId = "not_interested_button",label = "Not interested")
-    ),
-    column(width = 3,
-           actionButton(inputId = "seen_liked_button",label = "Seen-and-liked")
-    ),
-    column(width = 3,
-           actionButton(inputId = "seen_not_liked_button",label = "Seen-NO")
+    column(width = 6,
+          infoBox(round(mean(df$preu_metre),2),width = 6, fill=  T,
+                                   subtitle = "Average price", icon = icon("arrow-up"))
+          
+           ),
+    column(width = 6,
+           splitLayout(cellWidths = c("50%","50%"),
+           )
     )
   ),
+  # Distribution plot
+  fluidRow(column(width = 12, plotOutput("distplot_plot"))),
+  # Filter for price scatter plot
+  fluidRow(column(width = 12,
+                  checkboxInput(inputId = "s_barri", label = "Select all", value = T),
+                  uiOutput("ui_f_barri")
+    )),
+  # Scatter plot
   fluidRow(
-    DT::dataTableOutput("main_table")
-    ),
+    column(width = 12,
+    plotOutput("scatter_plot", brush = "plot_brush"))
+  ),
+  # Table and buttons  
   fluidRow(
-    DT::dataTableOutput("text")
+    column(width = 12,
+    sidebarLayout(position = "right",
+    mainPanel = mainPanel(
+      DT::dataTableOutput("main_table"),width = 10),
+    sidebarPanel = sidebarPanel(width = 2,
+          fixedRow(
+           actionButton(inputId = "interested_button",label = "Interested")
+           ),
+          fixedRow(
+           actionButton(inputId = "not_interested_button",label = "Not interested")
+           ),
+          fixedRow(
+           actionButton(inputId = "seen_liked_button",label = "Seen-and-liked")
+           ),
+          fixedRow(
+           actionButton(inputId = "seen_not_liked_button",label = "Seen-NO")
+          ),
+          fixedRow(
+            actionButton(inputId = "contacted_not_seen_button",label = "Contacted-not-seen")
+          )
+         )
+      )
+    )
+    )
   )
+
+ui <- dashboardPage(
+  header, 
+  dashboardSidebar(disable = T),
+  body
 )
 
 server <- function(input, output, session) {
@@ -141,21 +173,24 @@ server <- function(input, output, session) {
                     pull(barri))
     }
   })
-  output$distplot_plot <- renderPlot({
-    pinta_distribucio_barri(df)
-    })
-  data <- reactive({
-    if(!input$s_barri){
+  output$distplot_plot <- renderPlot(pinta_distribucio_barri(df))
+  
+  favorits <- pins::pin_reactive_read(board = board_folder(path2),
+                                      name = "favorits", interval = 1000)
+  
+  data <- reactive(
     df %>%
-      dplyr::filter(barri %in% input$f_barri)
-    } else {df}
-  })
+      `if`(!input$s_barri,
+           df %>% filter(barri %in% input$f_barri),.) %>%
+      left_join(favorits()) %>%
+      mutate(status = ifelse(is.na(status),"unassigned",status))
+    )
   
   output$scatter_plot <- renderPlot({
     data() %>%
     ggplot(aes(x = preu_metre,
                        y = preu,
-               color = any)) +
+               color = status)) +
       geom_point() +
       scale_x_continuous(labels = scales::label_dollar(suffix = "€/m2",prefix = NULL)) +
       scale_y_continuous(labels = scales::label_dollar(suffix = "€", prefix = NULL)) +
@@ -165,89 +200,89 @@ server <- function(input, output, session) {
       theme_minimal(base_size = 14)
   })
   
-  brushed_data <- reactive({
-    data <- brushedPoints(data(), input$plot_brush,allRows = T) %>%
-      mutate(id = paste0("<a href = \"",id, "\"> ",id,"</a>"))
-     
-     if(sum(data$selected_) == 0){
-     out <- data %>% select(-selected_)
-    } else {
-      out <- filter(data, selected_==T) %>% select(-selected_)
-    }
-      return(data)
-  })
+  
+  brushed_data <- reactive(brushedPoints(data(), input$plot_brush, allRows = T) %>%
+      mutate(id_out = paste0("<a href = \"",id, "\"> ",id,"</a>")) %>%
+        relocate(id_out, .before = carrer) %>%
+      `if`(sum(.$selected_) >0,
+               filter(., selected_==T),.) %>%
+             select(-selected_, -count_barri)
+      )
   
   output$main_table <- DT::renderDataTable({
-    DT::datatable(df, escape = F,rownames = F)},server = T)
+    DT::datatable(brushed_data() %>% select(-id), escape = F,rownames = F)},server = T)
   
-  output$text <- DT::renderDataTable(data_to_update())
+  observeEvent(input$interested_button, {
+
+    aux <- brushed_data()[input$main_table_rows_selected,]  %>%
+      select(id) %>%
+      mutate(status = "interested")
+    
+    out <- favorits() %>% rows_upsert(aux) %>%
+      unique()
+
+    pins::pin_write(pins::board_folder(path = path2),
+                   name = "favorits", x = out, versioned = F)
+    return(out)
+  })
   
-  # observeEvent(input$interested_button,{
-  #              aux <- df[input$main_table_rows_selected,]  %>%
-  #                select(id) %>%
-  #                mutate(status = "interested")
-  #              
-  #              out <- rows_update(df, aux)
-  #               } 
-  #              )
-  # observeEvent(input$intersted_button, {
-  #   
-  #   aux <- df[input$main_table_rows_selected,]  %>%
-  #     select(id) %>%
-  #     mutate(status = "interested")
-  #   
-  #   out <- left_join(update_categorized_df, aux) %>%
-  #     filter(!is.na(status))
-  #   
-  #   pins::pin_write(pins::board_folder(path = path),
-  #                  name = "categorized", x = out,versioned = F,type = "csv",
-  #                  title = "Categorized apartments")
-  #   return(out)
-  # })
-  # observeEvent(input$intersted_button, {
-  #   
-  #   aux <- df[input$main_table_rows_selected,]  %>%
-  #     select(id) %>%
-  #     mutate(status = "not_interested_button")
-  #   
-  #   out <- left_join(update_categorized_df, aux) %>%
-  #     filter(!is.na(status))
-  #   
-  #   pins::pin_write(pins::board_folder(path = path),
-  #                   name = "categorized", x = out,versioned = F,type = "csv",
-  #                   title = "Categorized apartments")
-  #   return(out)
-  # })
-  # observeEvent(input$intersted_button, {
-  #   
-  #   aux <- df[input$main_table_rows_selected,]  %>%
-  #     select(id) %>%
-  #     mutate(status = "interested")
-  #   
-  #   out <- left_join(df, aux) %>%
-  #     filter(!is.na(status))
-  #   
-  #   pins::pin_write(pins::board_folder(path = path),
-  #                   name = "categorized", x = out,versioned = F,type = "csv",
-  #                   title = "Categorized apartments")
-  #   return(out)
-  # })
-  # observeEvent(input$intersted_button, {
-  #   
-  #   aux <- df[input$main_table_rows_selected,]  %>%
-  #     select(id) %>%
-  #     mutate(status = "interested")
-  #   
-  #   out <- left_join(df, aux) %>%
-  #     filter(!is.na(status))
-  #   
-  #   pins::pin_write(pins::board_folder(path = path),
-  #                   name = "categorized", x = out,versioned = F,type = "csv",
-  #                   title = "Categorized apartments")
-  #   return(out)
-  # })
+  observeEvent(input$not_interested_button, {
+    
+    aux <- brushed_data()[input$main_table_rows_selected,]  %>%
+      select(id) %>%
+      mutate(status = "not_interested")
+    
+    out <- favorits() %>% rows_upsert(aux) %>%
+      unique()
+    
+    pins::pin_write(pins::board_folder(path = path2),
+                    name = "favorits", x = out, versioned = F)
+    return(out)
+  })
   
+  observeEvent(input$seen_liked_button, {
+    
+    aux <- brushed_data()[input$main_table_rows_selected,]  %>%
+      select(id) %>%
+      mutate(status = "seen_and_liked")
+    
+    out <- favorits() %>% rows_upsert(aux) %>%
+      unique()
+    
+    pins::pin_write(pins::board_folder(path = path2),
+                    name = "favorits", x = out, versioned = F)
+    return(out)
+  })
+  
+  observeEvent(input$seen_not_liked_button, {
+    
+    aux <- brushed_data()[input$main_table_rows_selected,]  %>%
+      select(id) %>%
+      mutate(status = "seen_not_liked")
+    
+    out <- favorits() %>% rows_upsert(aux) %>%
+      unique()
+    
+    pins::pin_write(pins::board_folder(path = path2),
+                    name = "favorits", x = out, versioned = F)
+    return(out)
+  })
+  
+  observeEvent(input$contacted_not_seen_button, {
+    
+    aux <- brushed_data()[input$main_table_rows_selected,]  %>%
+      select(id) %>%
+      mutate(status = "contacted_not_seen")
+    
+    out <- favorits() %>% rows_upsert(aux) %>%
+      unique()
+    
+    pins::pin_write(pins::board_folder(path = path2),
+                    name = "favorits", x = out, versioned = F)
+    return(out)
+  })
 }
+
 
 shinyApp(ui, server)
 
