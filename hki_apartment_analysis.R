@@ -77,6 +77,7 @@ pinta_distribucio_barri <- function(df){
     )
 }
 
+
 last_date <- list.files(path) %>% max()
 barris <- count_barris_progressio(path, dim_barris)
 tendencia <- tendencia_general(path)
@@ -92,15 +93,18 @@ tendencia_barris <- barris %>%
          diff_preu = (avgpreu-coalesce(lag(avgpreu),avgpreu))/avgpreu) %>%
   slice_tail(n = 1) %>% ungroup()
 
-tendencia_barris %>% arrange(desc(n)) %>%
-  slice_head(n=4) %>%
-  ggplot(aes(x = avgpreu, y = 1, label = round(avgpreu,1))) +
-    geom_linerange(aes(xmin = minpreu, xmax = maxpreu), alpha =.3) +
-    geom_text() +
-    facet_wrap("barri") +
-    theme_void(base_size = 16)
-
-
+ggplot(tendencia, 
+       aes(x = as_date(date),
+           y = general_trend)) + 
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) + 
+  labs(x = NULL, y = NULL) +
+  scale_x_date(expand = c(0,0)) +
+  scale_y_continuous(n.breaks = 2)
+  
 ### SHINY APP
 header <- dashboardHeader(
   title = "Apartments in Helsinki"
@@ -176,7 +180,7 @@ server <- function(input, output, session) {
   output$distplot_plot <- renderPlot(pinta_distribucio_barri(df))
   
   favorits <- pins::pin_reactive_read(board = board_folder(path2),
-                                      name = "favorits", interval = 1000)
+                                      name = "favorits",interval = 100)
   
   data <- reactive(
     df %>%
