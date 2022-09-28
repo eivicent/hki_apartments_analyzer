@@ -33,7 +33,7 @@ scrape_results <- function(url_search, max_page_number, rd){
 }
 scrape_apartments <- function(all_links){
   apartment_details <- list()
-  list_links <- list()
+  lost_links <- list()
   kk <- 1
   for(jj in 1:length(all_links)){
     
@@ -87,11 +87,11 @@ clean_apartments_df <- function(apartment_df, info, dim_barris = NULL){
 ##### SCRAPE #####
 page_number <- 1
 max_price <- 400000L
-url_search <- glue::glue("https://asunnot.oikotie.fi/myytavat-asunnot?pagination={page_number}&locations=%5B%5B1642,4,%22Kamppi,%20Helsinki%22%5D,%5B5695443,4,%22J%C3%A4tk%C3%A4saari,%20Helsinki%22%5D,%5B1643,4,%22Punavuori,%20Helsinki%22%5D,%5B1644,4,%22Eira,%20Helsinki%22%5D,%5B1645,4,%22Ullanlinna,%20Helsinki%22%5D,%5B1724,4,%22T%C3%B6%C3%B6l%C3%B6,%20Helsinki%22%5D,%5B1669,4,%22Lauttasaari,%20Helsinki%22%5D,%5B5695451,4,%22Kalasatama,%20Helsinki%22%5D,%5B1649,4,%22Kallio,%20Helsinki%22%5D,%5B1660,4,%22Vallila,%20Helsinki%22%5D,%5B335403,4,%22Alppila,%20Helsinki%22%5D,%5B335080,4,%22Lapinlahti,%20Helsinki%22%5D,%5B335078,4,%22Ruoholahti,%20Helsinki%22%5D,%5B335075,4,%22Siltasaari,%20Helsinki%22%5D,%5B335073,4,%22Hakaniemi,%20Helsinki%22%5D,%5B11820666,4,%22Sompasaari,%20Helsinki%22%5D,%5B1655,4,%22Pasila,%20Helsinki%22%5D,%5B1680,4,%22Kulosaari,%20Helsinki%22%5D%5D&price%5Bmax%5D={max_price}&roomCount%5B%5D=1&roomCount%5B%5D=2&roomCount%5B%5D=3&buildingType%5B%5D=1&buildingType%5B%5D=256&cardType=100")
+url_search <- ("https://asunnot.oikotie.fi/myytavat-asunnot?pagination={page_number}&locations=%5B%5B1642,4,%22Kamppi,%20Helsinki%22%5D,%5B5695443,4,%22J%C3%A4tk%C3%A4saari,%20Helsinki%22%5D,%5B1643,4,%22Punavuori,%20Helsinki%22%5D,%5B1644,4,%22Eira,%20Helsinki%22%5D,%5B1645,4,%22Ullanlinna,%20Helsinki%22%5D,%5B1724,4,%22T%C3%B6%C3%B6l%C3%B6,%20Helsinki%22%5D,%5B1669,4,%22Lauttasaari,%20Helsinki%22%5D,%5B5695451,4,%22Kalasatama,%20Helsinki%22%5D,%5B1649,4,%22Kallio,%20Helsinki%22%5D,%5B1660,4,%22Vallila,%20Helsinki%22%5D,%5B335403,4,%22Alppila,%20Helsinki%22%5D,%5B335080,4,%22Lapinlahti,%20Helsinki%22%5D,%5B335078,4,%22Ruoholahti,%20Helsinki%22%5D,%5B335075,4,%22Siltasaari,%20Helsinki%22%5D,%5B335073,4,%22Hakaniemi,%20Helsinki%22%5D,%5B11820666,4,%22Sompasaari,%20Helsinki%22%5D,%5B1655,4,%22Pasila,%20Helsinki%22%5D,%5B1680,4,%22Kulosaari,%20Helsinki%22%5D%5D&price%5Bmax%5D={max_price}&roomCount%5B%5D=1&roomCount%5B%5D=2&roomCount%5B%5D=3&buildingType%5B%5D=1&buildingType%5B%5D=256&cardType=100")
 
 driver <- rsDriver(browser = c("chrome"), chromever="105.0.5195.19")
 rd <- driver[["client"]]
-rd$navigate(url_search)
+rd$navigate(glue::glue(url_search))
 
 ## This is where you need to accept cookies manually before scraping
 
@@ -109,7 +109,7 @@ apartment_df_clean <-  clean_apartments_df(apartment_list$apartment_df, info)
 
 pin_write(board_folder(path = "./apartment_data"), 
           list("url_search" = glue(url_search),
-               "number_of_results" = length(unique(apartment_df$id)),
+               "number_of_results" = length(unique(apartment_df_clean$id)),
                "results_df" = apartment_df_clean,
                "lost_links" = apartment_list$lost_links), 
           paste0(Sys.Date()),
