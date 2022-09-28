@@ -104,7 +104,49 @@ ggplot(tendencia,
   labs(x = NULL, y = NULL) +
   scale_x_date(expand = c(0,0)) +
   scale_y_continuous(n.breaks = 2)
-  
+
+
+
+
+buttonUI <- function(id, label){
+  ns <- NS(id)
+  tagList(
+    actionButton(inputId = ns("button"),
+                 label = label)
+    )
+}
+
+buttonServer <- function(id, data_set, selected_rows, favorits, 
+                         path_of_pin, pin_to_update,
+                         status = NULL){
+  moduleServer(
+    id,
+    function(input, output, session) {
+      rows <- reactive(selected_rows)
+      
+      observeEvent(input$button, {
+        
+        #aux <- data_set[rows(),]  %>%
+         # select(id) %>%
+         # mutate(status = input$label)
+        
+        #out <- favorits %>% rows_upsert(aux) %>%
+        #  unique()
+
+        print(rows())
+
+
+        
+        #pins::pin_write(pins::board_folder(path = path_of_pin),
+        #                name = pin_to_update, x = out, versioned = F)
+      })
+      
+    }
+  )
+}
+                     
+
+
 ### SHINY APP
 header <- dashboardHeader(
   title = "Apartments in Helsinki"
@@ -139,10 +181,14 @@ body <- dashboardBody(
     column(width = 12,
     sidebarLayout(position = "right",
     mainPanel = mainPanel(
-      DT::dataTableOutput("main_table"),width = 10),
+      DT::dataTableOutput("main_table"),
+      #buttonUI("interested_button", "interested")),
+      width = 10),
+
     sidebarPanel = sidebarPanel(width = 2,
           fixedRow(
-           actionButton(inputId = "interested_button",label = "Interested")
+           buttonUI("interested_button", "interested")
+           #actionButton(inputId = "interested_button",label = "Interested")
            ),
           fixedRow(
            actionButton(inputId = "not_interested_button",label = "Not interested")
@@ -215,20 +261,34 @@ server <- function(input, output, session) {
   
   output$main_table <- DT::renderDataTable({
     DT::datatable(brushed_data() %>% select(-id), escape = F,rownames = F)},server = T)
+
+  rows <- reactive(input$main_table_rows_selected)
   
-  observeEvent(input$interested_button, {
+  buttonServer(id = "interested_button",
+               data_set = brushed_data(),
+               selected_rows = rows(),
+               favorits = favorits(),
+               path_of_pin = path2,
+               pin_to_update = "favorits")
 
-    aux <- brushed_data()[input$main_table_rows_selected,]  %>%
-      select(id) %>%
-      mutate(status = "interested")
-    
-    out <- favorits() %>% rows_upsert(aux) %>%
-      unique()
-
-    pins::pin_write(pins::board_folder(path = path2),
-                   name = "favorits", x = out, versioned = F)
-    return(out)
-  })
+  #observeEvent(input$interested_button, {
+  #  print(input$main_table_rows_selected)
+  #}
+  #)
+  
+  # observeEvent(input$interested_button, {
+  # 
+  #   aux <- brushed_data()[input$main_table_rows_selected,]  %>%
+  #     select(id) %>%
+  #     mutate(status = "interested")
+  #   
+  #   out <- favorits() %>% rows_upsert(aux) %>%
+  #     unique()
+  # 
+  #   pins::pin_write(pins::board_folder(path = path2),
+  #                  name = "favorits", x = out, versioned = F)
+  #   return(out)
+  # })
   
   observeEvent(input$not_interested_button, {
     
