@@ -55,7 +55,7 @@ ultimes_dades_disponibles <- function(path, minim_barri = 2, minim_preu = 4000, 
 pinta_distribucio_barri <- function(df){
   df %>%
     ggplot(aes(x = fct_reorder(barri, desc(barri)),
-               y = preu_metre)) +
+               y = mensualitat)) +
     geom_boxplot(outlier.shape = NA, coef = 1, linetype = 1, 
                  color = "blue") +
     geom_boxplot(outlier.shape = NA, fatten = 5, coef = 0) +

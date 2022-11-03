@@ -1,0 +1,8 @@
+file: 2022-10-20.rds
+file_size: 17339
+pin_hash: f1af954c56fcd650
+type: rds
+title: '2022-10-20: a pinned list'
+description: ~
+created: 20221020T020739Z
+api_version: 1.0
