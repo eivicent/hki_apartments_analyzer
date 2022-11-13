@@ -55,7 +55,7 @@ ultimes_dades_disponibles <- function(path, minim_barri = 2, minim_preu = 4000, 
 pinta_distribucio_barri <- function(df){
   df %>%
     ggplot(aes(x = fct_reorder(barri, desc(barri)),
-               y = mensualitat)) +
+               y = preu_metre)) +
     geom_boxplot(outlier.shape = NA, coef = 1, linetype = 1, 
                  color = "blue") +
     geom_boxplot(outlier.shape = NA, fatten = 5, coef = 0) +
@@ -102,8 +102,8 @@ ggplot(tendencia,
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank()) + 
   labs(x = NULL, y = NULL) +
-  scale_x_date(expand = c(0,0)) +
-  scale_y_continuous(n.breaks = 2)
+  scale_x_date(expand = c(0,1)) +
+  scale_y_continuous(n.breaks = 3)
   
 ### SHINY APP
 header <- dashboardHeader(
@@ -180,7 +180,7 @@ server <- function(input, output, session) {
   output$distplot_plot <- renderPlot(pinta_distribucio_barri(df))
   
   favorits <- pins::pin_reactive_read(board = board_folder(path2),
-                                      name = "favorits",interval = 100)
+                                      name = "favorits", interval = 100)
   
   data <- reactive(
     df %>%
@@ -193,12 +193,12 @@ server <- function(input, output, session) {
   output$scatter_plot <- renderPlot({
     data() %>%
     ggplot(aes(x = preu_metre,
-                       y = preu,
+                       y = mensualitat,
                color = status)) +
       geom_point() +
       scale_x_continuous(labels = scales::label_dollar(suffix = "€/m2",prefix = NULL)) +
-      scale_y_continuous(labels = scales::label_dollar(suffix = "€", prefix = NULL)) +
-      coord_cartesian(ylim = c(1.5e5, 4e5)) +
+      # scale_y_continuous(labels = scales::label_dollar(suffix = "€", prefix = NULL)) +
+      # coord_cartesian(ylim = c(1e5, 4e5)) +
       labs(x = NULL, y = NULL) +
       ggtitle("Apartaments per preu per metre quadrat i preu total") +
       theme_minimal(base_size = 14)
