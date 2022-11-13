@@ -38,9 +38,9 @@ tendencia_general <- function(path){
   out <- tibble(date = names(trend), general_trend = trend)
   return(out)
 }
-ultimes_dades_disponibles <- function(path, minim_barri = 2, minim_preu = 4000, dim_barris = dim_barris){
+dades_disponibles <- function(path, last_date, minim_barri = 2, minim_preu = 4000, dim_barris = dim_barris){
   all_data <- pins::pin_read(pins::board_folder(path = path),
-                   name = max(as.Date(list.files(path)),na.rm=T)) %>%
+                   name = last_date) %>%
     pluck("results_df") %>%
     clean_barris_apartments_df(dim_barris)
   
@@ -79,9 +79,37 @@ pinta_distribucio_barri <- function(df){
 
 
 last_date <- list.files(path) %>% max()
+first_date <- list.files(path) %>% min()
 barris <- count_barris_progressio(path, dim_barris)
 tendencia <- tendencia_general(path)
-df <- ultimes_dades_disponibles(path, minim_barri = 4, dim_barris = dim_barris)
+df <- dades_disponibles(path, last_date, minim_barri = 4, dim_barris = dim_barris)
+df_old <- dades_disponibles(path, first_date, minim_barri = 4, dim_barris = dim_barris)
+
+ups <- df %>% mutate(date = last_date) %>%
+  union(df_old %>% mutate(date = first_date)) %>%
+  group_by(id) %>%
+  mutate(disponibilitat = n())
+
+a <- ggplot(ups, aes(x = preu_metre,
+                color = date)) +
+  geom_density() +
+  geom_vline(aes(xintercept = median(preu_metre)),
+             linetype = 2, alpha = .6) + 
+  theme_void() +
+  theme(axis.text.x = element_text(color = "black"),
+        legend.title = element_blank(),
+        legend.position = "bottom")
+
+b <- group_by(ups, date) %>% summarise(overlap = sum(disponibilitat==2)/n()) %>%
+  filter(date == last_date) %>%
+  ggplot(aes(x = as.factor(1),
+         y = overlap,
+         label = paste0("Overlap of: \n", round(overlap*100,2),"%")))  +
+  geom_text() +
+  theme_void()
+
+a + inset_element(b, left = 0.6, bottom = .5, right = 1, top = 1,
+                  align_to = "plot",on_top = T)
 
 # pins::pin_write(board = pins::board_folder(path2),
 #                            x = df %>% slice(1) %>% select(id) %>% mutate(status = "test"),
@@ -93,7 +121,7 @@ tendencia_barris <- barris %>%
          diff_preu = (avgpreu-coalesce(lag(avgpreu),avgpreu))/avgpreu) %>%
   slice_tail(n = 1) %>% ungroup()
 
-ggplot(tendencia, 
+tendencia_apartamentes_plot <- ggplot(tendencia, 
        aes(x = as_date(date),
            y = general_trend)) + 
   geom_line() +
@@ -113,8 +141,8 @@ body <- dashboardBody(
   # Header for summary
   fluidRow(
     column(width = 6,
-          infoBox(round(mean(df$preu_metre),2),width = 6, fill=  T,
-                                   subtitle = "Average price", icon = icon("arrow-up"))
+          infoBox(round(mean(df$preu_metre),2), width = 6, fill=  T,
+                  subtitle = "Average price", icon = icon("arrow-up"))
           
            ),
     column(width = 6,
