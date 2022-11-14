@@ -85,6 +85,7 @@ tendencia <- tendencia_general(path)
 df <- dades_disponibles(path, last_date, minim_barri = 4, dim_barris = dim_barris)
 df_old <- dades_disponibles(path, first_date, minim_barri = 4, dim_barris = dim_barris)
 
+evolucio_preu <- function(){
 ups <- df %>% mutate(date = last_date) %>%
   union(df_old %>% mutate(date = first_date)) %>%
   group_by(id) %>%
@@ -108,18 +109,15 @@ b <- group_by(ups, date) %>% summarise(overlap = sum(disponibilitat==2)/n()) %>%
   geom_text() +
   theme_void()
 
-a + inset_element(b, left = 0.6, bottom = .5, right = 1, top = 1,
+out <- a + inset_element(b, left = 0.6, bottom = .5, right = 1, top = 1,
                   align_to = "plot",on_top = T)
+
+return(out)
+}
 
 # pins::pin_write(board = pins::board_folder(path2),
 #                            x = df %>% slice(1) %>% select(id) %>% mutate(status = "test"),
 #                            name = "favorits")
-
-tendencia_barris <- barris %>% 
-  group_by(barri) %>% arrange(date) %>%
-  mutate(diff_n = (n - coalesce(lag(n),n))/n,
-         diff_preu = (avgpreu-coalesce(lag(avgpreu),avgpreu))/avgpreu) %>%
-  slice_tail(n = 1) %>% ungroup()
 
 tendencia_apartamentes_plot <- ggplot(tendencia, 
        aes(x = as_date(date),
@@ -141,13 +139,10 @@ body <- dashboardBody(
   # Header for summary
   fluidRow(
     column(width = 6,
-          infoBox(round(mean(df$preu_metre),2), width = 6, fill=  T,
-                  subtitle = "Average price", icon = icon("arrow-up"))
-          
-           ),
+          plotOutput("tendencia_plot")
+          ),
     column(width = 6,
-           splitLayout(cellWidths = c("50%","50%"),
-           )
+           plotOutput("tendencia_preu")
     )
   ),
   # Distribution plot
@@ -205,6 +200,8 @@ server <- function(input, output, session) {
                     pull(barri))
     }
   })
+  output$tendencia_plot <- renderPlot(tendencia_apartamentes_plot)
+  output$tendencia_preu <- renderPlot(evolucio_preu())
   output$distplot_plot <- renderPlot(pinta_distribucio_barri(df))
   
   favorits <- pins::pin_reactive_read(board = board_folder(path2),
