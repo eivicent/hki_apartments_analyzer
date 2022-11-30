@@ -23,7 +23,7 @@ scrape_results <- function(url_search, max_page_number, rd){
     rd$navigate(new_page)
     links <- rd$findElements(using = "xpath", value = "//*[@class = 'ot-card ng-scope']")
     df <- data.frame(link = unlist(sapply(links, function(x){x$getElementAttribute('href')})))
-    Sys.sleep(30)
+    Sys.sleep(20)
     all_links[[ii]] <- df
     cat(ii, "/", max_page_number, "\n")
   }
@@ -32,38 +32,7 @@ scrape_results <- function(url_search, max_page_number, rd){
   return(df_all)
 }
 scrape_apartments <- function(all_links){
-  apartment_details <- list()
-  lost_links <- list()
-  kk <- 1
-  for(jj in 1:length(all_links)){
-    
-    apartment_html <-  tryCatch(read_html(all_links[jj]),
-                                error = function(e) NA)
-    Sys.sleep(30)
-    if(is.na(apartment_html)) {
-      apartment_details[[jj]] <- NA
-      lost_links[[kk]] <- all_links[jj]
-      kk <- kk + 1
-      next
-    }
-    
-    aux <- apartment_html %>%
-      html_elements(".listing-details") %>% 
-      html_element(".info-table") %>% 
-      html_children()
-    
-    headers <- aux %>% html_element(".info-table__title") %>% html_text2
-    values <- aux %>% html_element(".info-table__value") %>% html_text2
-    
-    apartment_details[[jj]] <- tibble(headers, values)
-    cat(jj, "/", length(all_links), "\n")
-  }
-  names(apartment_details) <- all_links
-  apartment_details_clean <- purrr::keep(apartment_details, is_tibble) %>%
-    bind_rows(.id = "id") %>%
-    distinct()
-  return(list(apartment_df = apartment_details_clean,
-              lost_links = lost_links))
+  
 }
 clean_apartments_df <- function(apartment_df, info, dim_barris = NULL){
   aux <- apartment_df %>% 
@@ -98,7 +67,41 @@ rd$navigate(glue::glue(url_search))
 
 max_pages <- get_max_pages(url_serach, rd)
 all_links <- scrape_results(url_search, max_pages, rd)
-apartment_list <- scrape_apartments(all_links)
+# apartment_list <- scrape_apartments(all_links)
+
+
+apartment_details <- list()
+lost_links <- list()
+kk <- 1
+for(jj in 1:length(all_links)){
+  
+  apartment_html <-  tryCatch(read_html(all_links[jj]),
+                              error = function(e) NA)
+  Sys.sleep(20)
+  if(is.na(apartment_html)) {
+    apartment_details[[jj]] <- NA
+    lost_links[[kk]] <- all_links[jj]
+    kk <- kk + 1
+    next
+  }
+  
+  aux <- apartment_html %>%
+    html_elements(".listing-details") %>% 
+    html_element(".info-table") %>% 
+    html_children()
+  
+  headers <- aux %>% html_element(".info-table__title") %>% html_text2
+  values <- aux %>% html_element(".info-table__value") %>% html_text2
+  
+  apartment_details[[jj]] <- tibble(headers, values)
+  cat(jj, "/", length(all_links), "\n")
+}
+names(apartment_details) <- all_links
+apartment_details_clean <- purrr::keep(apartment_details, is_tibble) %>%
+  bind_rows(.id = "id") %>%
+  distinct()
+apartment_list <- list(apartment_df = apartment_details_clean,
+            lost_links = lost_links)
 
 
 ##### CLEAN RESULTS #####
