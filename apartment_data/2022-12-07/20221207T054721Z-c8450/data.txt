@@ -1,0 +1,8 @@
+file: 2022-12-07.rds
+file_size: 29231
+pin_hash: c84505016d61ca89
+type: rds
+title: '2022-12-07: a pinned list'
+description: ~
+created: 20221207T054721Z
+api_version: 1.0
