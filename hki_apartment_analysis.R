@@ -71,6 +71,7 @@ primera_data_disponible <- list.files(path) %>% min()
 tendencia <- tendencia_disponibilitat(path)
 
 df <- llegeix_pin_apartaments(paths = path, dates = primera_data_disponible)
+df_old <- llegeix_pin_apartaments(paths = path, dates = ultima_data_disponible)
 
 evolucio_preu <- function(){
 ups <- df %>% mutate(date = ultima_data_disponible) %>%
