@@ -9,28 +9,28 @@ path <- "./apartment_data/"
 path2 <- "./data/"
 dim_barris <- read_csv("dim_barris.csv", show_col_types = F)
 
-refactor_barris <- function(apartments_df, dim_barris = NULL){
+refactor_barris <- function(apartments_df, dim_barris_df = NULL){
   apartments_df %>% 
-    `if`(!is.null(dim_barris),
-         dplyr::left_join(.,dim_barris, c("barri" = "original")) %>%
+    `if`(!is.null(dim_barris_df),
+         dplyr::left_join(.,dim_barris_df, c("barri" = "original")) %>%
            dplyr::mutate(actualitzat = coalesce(actualitzat, barri)) %>%
            dplyr::select(-barri) %>%
            dplyr::rename(barri = actualitzat),.) %>%
     dplyr::distinct()
 }
-tendencia_disponibilitat <- function(path){
-  trend <- sapply(list.files(path), function(x) {
-    pins::pin_read(pins::board_folder(path = path),name = x) %>%
+tendencia_disponibilitat <- function(paths){
+  trend <- sapply(list.files(paths), function(x) {
+    pins::pin_read(pins::board_folder(path = paths),name = x) %>%
     pluck("number_of_results")
   })
   out <- tibble(date = names(trend), general_trend = trend)
   return(out)
 }
-llegeix_pin_apartaments <- function(path, date, minim_disponible_barri = 4, minim_preu = 4000, dim_barris = dim_barris){
-  all_data <- pins::pin_read(pins::board_folder(path = path),
-                   name = date) %>%
+llegeix_pin_apartaments <- function(paths, dates, minim_disponible_barri = 4, minim_preu = 4000, dim_barris_df = dim_barris){
+  all_data <- pins::pin_read(pins::board_folder(path = paths),
+                   name = dates) %>%
     pluck("results_df") %>%
-    refactor_barris(dim_barris)
+    refactor_barris(dim_barris_df)
   
   out <- all_data %>%
     group_by(barri) %>%
@@ -70,7 +70,7 @@ ultima_data_disponible <- list.files(path) %>% max()
 primera_data_disponible <- list.files(path) %>% min()
 tendencia <- tendencia_disponibilitat(path)
 
-df <- llegeix_pin_apartaments(path = path, date = primera_data_disponible)
+df <- llegeix_pin_apartaments(paths = path, dates = primera_data_disponible)
 
 evolucio_preu <- function(){
 ups <- df %>% mutate(date = ultima_data_disponible) %>%
