@@ -3,56 +3,44 @@ library(shiny)
 library(shinydashboard)
 library(lubridate)
 library(pins)
+library(patchwork)
 
 path <- "./apartment_data/"
 path2 <- "./data/"
 dim_barris <- read_csv("dim_barris.csv", show_col_types = F)
-clean_barris_apartments_df <- function(apartments_df, dim_barris = NULL){
+
+refactor_barris <- function(apartments_df, dim_barris_df = NULL){
   apartments_df %>% 
-    `if`(!is.null(dim_barris),
-         dplyr::left_join(.,dim_barris, c("barri" = "original")) %>%
+    `if`(!is.null(dim_barris_df),
+         dplyr::left_join(.,dim_barris_df, c("barri" = "original")) %>%
            dplyr::mutate(actualitzat = coalesce(actualitzat, barri)) %>%
            dplyr::select(-barri) %>%
            dplyr::rename(barri = actualitzat),.) %>%
     dplyr::distinct()
 }
-count_barris_progressio <- function(path, dim_barris = dim_barris){
-  all_data <- lapply(list.files(path), function(x) 
-    pins::pin_read(pins::board_folder(path = path),
-                   name = x) %>% pluck("results_df"))
-  names(all_data) <- list.files(path)
-  out <- all_data %>% bind_rows(.id = "date") %>%
-    clean_barris_apartments_df(dim_barris) %>%
-    group_by(date, barri)  %>%
-    summarise(n = n(),
-              minpreu = min(preu_metre),
-              maxpreu = max(preu_metre),
-              avgpreu = mean(preu_metre))
-  return(out)
-}
-tendencia_general <- function(path){
-  trend <- sapply(list.files(path), function(x) {
-    pins::pin_read(pins::board_folder(path = path),name = x) %>%
+tendencia_disponibilitat <- function(paths){
+  trend <- sapply(list.files(paths), function(x) {
+    pins::pin_read(pins::board_folder(path = paths),name = x) %>%
     pluck("number_of_results")
   })
   out <- tibble(date = names(trend), general_trend = trend)
   return(out)
 }
-ultimes_dades_disponibles <- function(path, minim_barri = 2, minim_preu = 4000, dim_barris = dim_barris){
-  all_data <- pins::pin_read(pins::board_folder(path = path),
-                   name = max(as.Date(list.files(path)),na.rm=T)) %>%
+llegeix_pin_apartaments <- function(paths, dates, minim_disponible_barri = 4, minim_preu = 4000, dim_barris_df = dim_barris){
+  all_data <- pins::pin_read(pins::board_folder(path = paths),
+                   name = dates) %>%
     pluck("results_df") %>%
-    clean_barris_apartments_df(dim_barris)
+    refactor_barris(dim_barris_df)
   
   out <- all_data %>%
     group_by(barri) %>%
-    mutate(count_barri = n()) %>%
-    filter(count_barri > minim_barri &
+    mutate(total_disponible_barri = n()) %>%
+    filter(total_disponible_barri > minim_disponible_barri &
              preu_metre >= minim_preu) %>%
     ungroup()
   return(out)
 }
-pinta_distribucio_barri <- function(df){
+boxplot_preu_per_barri <- function(df){
   df %>%
     ggplot(aes(x = fct_reorder(barri, desc(barri)),
                y = preu_metre)) +
@@ -61,8 +49,8 @@ pinta_distribucio_barri <- function(df){
     geom_boxplot(outlier.shape = NA, fatten = 5, coef = 0) +
     geom_jitter(alpha = .1) +
     coord_flip() +
-    geom_text(data = df %>% select(barri, count_barri) %>% unique, 
-              aes(x = barri,  y = 3.6e3, label = count_barri)) +
+    geom_text(data = df %>% select(barri, total_disponible_barri) %>% unique, 
+              aes(x = barri,  y = 3.6e3, label = total_disponible_barri)) +
     scale_y_continuous(breaks = seq(4.5,20e3, by = 1.5e3),
                        labels = scales::dollar_format(accuracy = .1,
                                                       scale = .001,
@@ -78,22 +66,48 @@ pinta_distribucio_barri <- function(df){
 }
 
 
-last_date <- list.files(path) %>% max()
-barris <- count_barris_progressio(path, dim_barris)
-tendencia <- tendencia_general(path)
-df <- ultimes_dades_disponibles(path, minim_barri = 4, dim_barris = dim_barris)
+ultima_data_disponible <- list.files(path) %>% max()
+primera_data_disponible <- list.files(path) %>% min()
+tendencia <- tendencia_disponibilitat(path)
+
+df <- llegeix_pin_apartaments(paths = path, dates = primera_data_disponible)
+df_old <- llegeix_pin_apartaments(paths = path, dates = ultima_data_disponible)
+
+evolucio_preu <- function(){
+ups <- df %>% mutate(date = ultima_data_disponible) %>%
+  union(df_old %>% mutate(date = primera_data_disponible)) %>%
+  group_by(id) %>%
+  mutate(disponibilitat = n())
+
+a <- ggplot(ups, aes(x = preu_metre,
+                color = date)) +
+  geom_density() +
+  geom_vline(aes(xintercept = median(preu_metre)),
+             linetype = 2, alpha = .6) + 
+  theme_void() +
+  theme(axis.text.x = element_text(color = "black"),
+        legend.title = element_blank(),
+        legend.position = "bottom")
+
+b <- group_by(ups, date) %>% summarise(overlap = sum(disponibilitat==2)/n()) %>%
+  filter(date == ultima_data_disponible) %>%
+  ggplot(aes(x = as.factor(1),
+         y = overlap,
+         label = paste0("Overlap of: \n", round(overlap*100,2),"%")))  +
+  geom_text() +
+  theme_void()
+
+out <- a + inset_element(b, left = 0.6, bottom = .5, right = 1, top = 1,
+                  align_to = "plot",on_top = T)
+
+return(out)
+}
 
 # pins::pin_write(board = pins::board_folder(path2),
 #                            x = df %>% slice(1) %>% select(id) %>% mutate(status = "test"),
 #                            name = "favorits")
 
-tendencia_barris <- barris %>% 
-  group_by(barri) %>% arrange(date) %>%
-  mutate(diff_n = (n - coalesce(lag(n),n))/n,
-         diff_preu = (avgpreu-coalesce(lag(avgpreu),avgpreu))/avgpreu) %>%
-  slice_tail(n = 1) %>% ungroup()
-
-ggplot(tendencia, 
+tendencia_apartamentes_plot <- ggplot(tendencia, 
        aes(x = as_date(date),
            y = general_trend)) + 
   geom_line() +
@@ -146,7 +160,6 @@ buttonServer <- function(id, data_set, selected_rows, favorits,
 }
                      
 
-
 ### SHINY APP
 header <- dashboardHeader(
   title = "Apartments in Helsinki"
@@ -155,13 +168,10 @@ body <- dashboardBody(
   # Header for summary
   fluidRow(
     column(width = 6,
-          infoBox(round(mean(df$preu_metre),2),width = 6, fill=  T,
-                                   subtitle = "Average price", icon = icon("arrow-up"))
-          
-           ),
+          plotOutput("tendencia_plot")
+          ),
     column(width = 6,
-           splitLayout(cellWidths = c("50%","50%"),
-           )
+           plotOutput("tendencia_preu")
     )
   ),
   # Distribution plot
@@ -223,10 +233,12 @@ server <- function(input, output, session) {
                     pull(barri))
     }
   })
-  output$distplot_plot <- renderPlot(pinta_distribucio_barri(df))
+  output$tendencia_plot <- renderPlot(tendencia_apartamentes_plot)
+  output$tendencia_preu <- renderPlot(evolucio_preu())
+  output$distplot_plot <- renderPlot(boxplot_preu_per_barri(df))
   
   favorits <- pins::pin_reactive_read(board = board_folder(path2),
-                                      name = "favorits",interval = 100)
+                                      name = "favorits", interval = 100)
   
   data <- reactive(
     df %>%
@@ -239,12 +251,12 @@ server <- function(input, output, session) {
   output$scatter_plot <- renderPlot({
     data() %>%
     ggplot(aes(x = preu_metre,
-                       y = preu,
+                       y = mensualitat,
                color = status)) +
       geom_point() +
       scale_x_continuous(labels = scales::label_dollar(suffix = "€/m2",prefix = NULL)) +
-      scale_y_continuous(labels = scales::label_dollar(suffix = "€", prefix = NULL)) +
-      coord_cartesian(ylim = c(1.5e5, 4e5)) +
+      # scale_y_continuous(labels = scales::label_dollar(suffix = "€", prefix = NULL)) +
+      # coord_cartesian(ylim = c(1e5, 4e5)) +
       labs(x = NULL, y = NULL) +
       ggtitle("Apartaments per preu per metre quadrat i preu total") +
       theme_minimal(base_size = 14)
@@ -256,7 +268,7 @@ server <- function(input, output, session) {
         relocate(id_out, .before = carrer) %>%
       `if`(sum(.$selected_) >0,
                filter(., selected_==T),.) %>%
-             select(-selected_, -count_barri)
+             select(-selected_, -total_disponible_barri)
       )
   
   output$main_table <- DT::renderDataTable({
