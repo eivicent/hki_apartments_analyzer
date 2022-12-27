@@ -1,8 +1,0 @@
-file: favorits.rds
-file_size: 279
-pin_hash: 643c289bdc36c82d
-type: rds
-title: 'favorits: a pinned 10 x 2 data frame'
-description: ~
-created: 20220928T190311Z
-api_version: 1.0

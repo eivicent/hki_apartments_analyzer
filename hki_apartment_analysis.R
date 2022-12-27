@@ -103,10 +103,6 @@ out <- a + inset_element(b, left = 0.6, bottom = .5, right = 1, top = 1,
 return(out)
 }
 
-# pins::pin_write(board = pins::board_folder(path2),
-#                            x = df %>% slice(1) %>% select(id) %>% mutate(status = "test"),
-#                            name = "favorits")
-
 tendencia_apartamentes_plot <- ggplot(tendencia, 
        aes(x = as_date(date),
            y = general_trend)) + 
@@ -124,10 +120,8 @@ tendencia_apartamentes_plot <- ggplot(tendencia,
 
 buttonUI <- function(id, label){
   ns <- NS(id)
-  tagList(
     actionButton(inputId = ns("button"),
-                 label = label)
-    )
+                 label = ns(label))
 }
 
 buttonServer <- function(id, data_set, selected_rows, favorits, 
@@ -136,23 +130,17 @@ buttonServer <- function(id, data_set, selected_rows, favorits,
   moduleServer(
     id,
     function(input, output, session) {
-      rows <- reactive(selected_rows)
-      
       observeEvent(input$button, {
         
-        #aux <- data_set[rows(),]  %>%
-         # select(id) %>%
-         # mutate(status = input$label)
+        aux <- data_set()[selected_rows(),]  %>%
+          select(id) %>%
+          mutate(status = input$label)
         
-        #out <- favorits %>% rows_upsert(aux) %>%
-        #  unique()
+        out <- favorits() %>% rows_upsert(aux) %>%
+          unique()
 
-        print(rows())
-
-
-        
-        #pins::pin_write(pins::board_folder(path = path_of_pin),
-        #                name = pin_to_update, x = out, versioned = F)
+        pins::pin_write(pins::board_folder(path = path_of_pin),
+                        name = pin_to_update, x = out, versioned = F)
       })
       
     }
@@ -192,22 +180,20 @@ body <- dashboardBody(
     sidebarLayout(position = "right",
     mainPanel = mainPanel(
       DT::dataTableOutput("main_table"),
-      #buttonUI("interested_button", "interested")),
       width = 10),
 
     sidebarPanel = sidebarPanel(width = 2,
           fixedRow(
-           buttonUI("interested_button", "interested")
-           #actionButton(inputId = "interested_button",label = "Interested")
+           buttonUI("interested_button", label = "interested")
            ),
           fixedRow(
-           actionButton(inputId = "not_interested_button",label = "Not interested")
+            buttonUI("not_interested_button", label = "Not interested")
            ),
           fixedRow(
-           actionButton(inputId = "seen_liked_button",label = "Seen-and-liked")
+            buttonUI("seen_liked_button", label = "Seen-and-liked")
            ),
           fixedRow(
-           actionButton(inputId = "seen_not_liked_button",label = "Seen-NO")
+            buttonUI("seen_not_liked_button", label = "Seen-NO")
           ),
           fixedRow(
             actionButton(inputId = "contacted_not_seen_button",label = "Contacted-not-seen")
@@ -238,7 +224,13 @@ server <- function(input, output, session) {
   output$distplot_plot <- renderPlot(boxplot_preu_per_barri(df))
   
   favorits <- pins::pin_reactive_read(board = board_folder(path2),
-                                      name = "favorits", interval = 100)
+                                      name = "favorits", interval = 10)
+  
+  favoritsss <- pins::pin_read(board = board_folder(path2),
+                                      name = "favorits")
+  
+  datas <- df %>% left_join(favoritsss) %>% 
+    mutate(status = ifelse(is.na(status), "unassigned", status))
   
   data <- reactive(
     df %>%
@@ -277,86 +269,32 @@ server <- function(input, output, session) {
   rows <- reactive(input$main_table_rows_selected)
   
   buttonServer(id = "interested_button",
-               data_set = brushed_data(),
-               selected_rows = rows(),
-               favorits = favorits(),
+               data_set = reactive(brushed_data()),
+               selected_rows = reactive(rows()),
+               favorits = reactive(favorits()),
                path_of_pin = path2,
                pin_to_update = "favorits")
-
-  #observeEvent(input$interested_button, {
-  #  print(input$main_table_rows_selected)
-  #}
-  #)
   
-  # observeEvent(input$interested_button, {
-  # 
-  #   aux <- brushed_data()[input$main_table_rows_selected,]  %>%
-  #     select(id) %>%
-  #     mutate(status = "interested")
-  #   
-  #   out <- favorits() %>% rows_upsert(aux) %>%
-  #     unique()
-  # 
-  #   pins::pin_write(pins::board_folder(path = path2),
-  #                  name = "favorits", x = out, versioned = F)
-  #   return(out)
-  # })
+  buttonServer(id = "not_interested_button",
+               data_set = reactive(brushed_data()),
+               selected_rows = reactive(rows()),
+               favorits = reactive(favorits()),
+               path_of_pin = path2,
+               pin_to_update = "favorits")
   
-  observeEvent(input$not_interested_button, {
-    
-    aux <- brushed_data()[input$main_table_rows_selected,]  %>%
-      select(id) %>%
-      mutate(status = "not_interested")
-    
-    out <- favorits() %>% rows_upsert(aux) %>%
-      unique()
-    
-    pins::pin_write(pins::board_folder(path = path2),
-                    name = "favorits", x = out, versioned = F)
-    return(out)
-  })
+  buttonServer(id = "seen_liked_button",
+               data_set = reactive(brushed_data()),
+               selected_rows = reactive(rows()),
+               favorits = reactive(favorits()),
+               path_of_pin = path2,
+               pin_to_update = "favorits")
   
-  observeEvent(input$seen_liked_button, {
-    
-    aux <- brushed_data()[input$main_table_rows_selected,]  %>%
-      select(id) %>%
-      mutate(status = "seen_and_liked")
-    
-    out <- favorits() %>% rows_upsert(aux) %>%
-      unique()
-    
-    pins::pin_write(pins::board_folder(path = path2),
-                    name = "favorits", x = out, versioned = F)
-    return(out)
-  })
-  
-  observeEvent(input$seen_not_liked_button, {
-    
-    aux <- brushed_data()[input$main_table_rows_selected,]  %>%
-      select(id) %>%
-      mutate(status = "seen_not_liked")
-    
-    out <- favorits() %>% rows_upsert(aux) %>%
-      unique()
-    
-    pins::pin_write(pins::board_folder(path = path2),
-                    name = "favorits", x = out, versioned = F)
-    return(out)
-  })
-  
-  observeEvent(input$contacted_not_seen_button, {
-    
-    aux <- brushed_data()[input$main_table_rows_selected,]  %>%
-      select(id) %>%
-      mutate(status = "contacted_not_seen")
-    
-    out <- favorits() %>% rows_upsert(aux) %>%
-      unique()
-    
-    pins::pin_write(pins::board_folder(path = path2),
-                    name = "favorits", x = out, versioned = F)
-    return(out)
-  })
+  buttonServer(id = "seen_not_liked_button",
+               data_set = reactive(brushed_data()),
+               selected_rows = reactive(rows()),
+               favorits = reactive(favorits()),
+               path_of_pin = path2,
+               pin_to_update = "favorits")
 }
 
 
