@@ -4,5 +4,5 @@ pin_hash: 8c8851ac2492a43a
 type: rds
 title: 'favorits: a pinned 11 x 2 data frame'
 description: ~
-created: 20221222T222942Z
+created: 20230104T171400Z
 api_version: 1.0
