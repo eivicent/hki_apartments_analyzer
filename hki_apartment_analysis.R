@@ -54,7 +54,7 @@ boxplot_preu_per_barri <- function(df){
     scale_y_continuous(breaks = seq(4.5,20e3, by = 1.5e3),
                        labels = scales::dollar_format(accuracy = .1,
                                                       scale = .001,
-                                                      prefix = NULL,)) +
+                                                      prefix = NULL)) +
     labs(y = "k€ / m2", x = NULL) +
     theme(axis.text.y = element_text(size = 14),
           axis.ticks.y = element_blank(),
@@ -120,13 +120,12 @@ tendencia_apartamentes_plot <- ggplot(tendencia,
 
 buttonUI <- function(id, label){
   ns <- NS(id)
-    actionButton(inputId = ns("button"),
-                 label = ns(label))
+    actionButton(inputId = ns("button"), label = label)
 }
 
 buttonServer <- function(id, data_set, selected_rows, favorits, 
-                         path_of_pin, pin_to_update,
-                         status = NULL){
+                         path_of_pin, pin_to_update, 
+                         label){
   moduleServer(
     id,
     function(input, output, session) {
@@ -134,7 +133,7 @@ buttonServer <- function(id, data_set, selected_rows, favorits,
         
         aux <- data_set()[selected_rows(),]  %>%
           select(id) %>%
-          mutate(status = input$label)
+          mutate(status = label)
         
         out <- favorits() %>% rows_upsert(aux) %>%
           unique()
@@ -194,9 +193,6 @@ body <- dashboardBody(
            ),
           fixedRow(
             buttonUI("seen_not_liked_button", label = "Seen-NO")
-          ),
-          fixedRow(
-            actionButton(inputId = "contacted_not_seen_button",label = "Contacted-not-seen")
           )
          )
       )
@@ -225,13 +221,6 @@ server <- function(input, output, session) {
   
   favorits <- pins::pin_reactive_read(board = board_folder(path2),
                                       name = "favorits", interval = 10)
-  
-  favoritsss <- pins::pin_read(board = board_folder(path2),
-                                      name = "favorits")
-  
-  datas <- df %>% left_join(favoritsss) %>% 
-    mutate(status = ifelse(is.na(status), "unassigned", status))
-  
   data <- reactive(
     df %>%
       `if`(!input$s_barri,
@@ -269,6 +258,7 @@ server <- function(input, output, session) {
   rows <- reactive(input$main_table_rows_selected)
   
   buttonServer(id = "interested_button",
+               label = "interested",
                data_set = reactive(brushed_data()),
                selected_rows = reactive(rows()),
                favorits = reactive(favorits()),
@@ -276,6 +266,7 @@ server <- function(input, output, session) {
                pin_to_update = "favorits")
   
   buttonServer(id = "not_interested_button",
+               label = "not_interested",
                data_set = reactive(brushed_data()),
                selected_rows = reactive(rows()),
                favorits = reactive(favorits()),
@@ -283,6 +274,7 @@ server <- function(input, output, session) {
                pin_to_update = "favorits")
   
   buttonServer(id = "seen_liked_button",
+               label = "seen_liked",
                data_set = reactive(brushed_data()),
                selected_rows = reactive(rows()),
                favorits = reactive(favorits()),
@@ -290,6 +282,7 @@ server <- function(input, output, session) {
                pin_to_update = "favorits")
   
   buttonServer(id = "seen_not_liked_button",
+               label = "seen_not_liked",
                data_set = reactive(brushed_data()),
                selected_rows = reactive(rows()),
                favorits = reactive(favorits()),
